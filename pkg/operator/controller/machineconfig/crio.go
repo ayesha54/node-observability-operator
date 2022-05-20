@@ -96,7 +96,7 @@ func (r *MachineConfigReconciler) disableCrioProf(ctx context.Context) error {
 // by this controller for enabling profiling
 func (r *MachineConfigReconciler) fetchCrioProfConf(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfig, error) {
 	criomc := &mcv1.MachineConfig{}
-	if err := r.Get(ctx, namespace, criomc); err != nil {
+	if err := r.Impl.ClientGet(ctx, r.Client, namespace, criomc); err != nil {
 		return nil, err
 	}
 	return criomc, nil
@@ -113,7 +113,7 @@ func (r *MachineConfigReconciler) createCrioProfConf(ctx context.Context) error 
 		r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
 	}
 
-	if err := r.Create(ctx, criomc); err != nil {
+	if err := r.Impl.ClientCreate(ctx, r.Client, criomc); err != nil {
 		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
 	}
 
@@ -123,7 +123,7 @@ func (r *MachineConfigReconciler) createCrioProfConf(ctx context.Context) error 
 
 // deleteCrioProfConf is for deleting CRI-O MC CR
 func (r *MachineConfigReconciler) deleteCrioProfConf(ctx context.Context, criomc *mcv1.MachineConfig) error {
-	if err := r.Delete(ctx, criomc); err != nil {
+	if err := r.Impl.ClientDelete(ctx, r.Client, criomc); err != nil {
 		return fmt.Errorf("failed to remove crio profiling config %s: %w", criomc.Name, err)
 	}
 

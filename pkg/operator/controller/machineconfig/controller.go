@@ -19,15 +19,18 @@ package machineconfigcontroller
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/go-logr/logr"
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
-
-	"github.com/go-logr/logr"
-
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -36,6 +39,40 @@ import (
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
+
+// New returns a new MachineConfigReconciler instance.
+func New(logger logr.Logger, labelDenials bool, impls ...impl) (*MachineConfigReconciler, error) {
+	var effectiveimpl impl
+	if len(impls) == 0 {
+		effectiveimpl = &defaultImpl{}
+	} else {
+		effectiveimpl = impls[0]
+	}
+	clusterConfig, err := effectiveimpl.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("get in-cluster config: %w", err)
+	}
+
+	clientset, err := effectiveimpl.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, fmt.Errorf("load in-cluster config: %w", err)
+	}
+
+	return &MachineConfigReconciler{
+		Impl:        effectiveimpl,
+		Client:      client.Client,
+		SyncRWMutex: sync.RWMutex,
+
+		Node:          NodeSyncData,
+		Record:        event.Recorder,
+		MachineConfig: MachineConfigSyncData,
+		Scheme:        *runtime.Scheme,
+		Log:           logger,
+		CtrlConfig:    *v1alpha1.NodeObservabilityMachineConfig,
+		EventRecorder: record.EventRecorder,
+		ClientSet:     clientset,
+	}, nil
+}
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -49,7 +86,6 @@ import (
 // MachineConfigs, controller creates the required MachineConfigs, MachineConfigPool
 // and labels the nodes where the changes are to be applied.
 func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
 	var err error
 	if r.Log, err = logr.FromContext(ctx); err != nil {
 		return ctrl.Result{}, err
@@ -59,8 +95,8 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
-	if err = r.Get(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
-		if errors.IsNotFound(err) {
+	if err = r.Impl.ClientGet(ctx, r.Client, req.NamespacedName, r.CtrlConfig); err != nil {
+		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -114,7 +150,7 @@ func (r *MachineConfigReconciler) withFinalizers(ctx context.Context, req ctrl.R
 	withFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, req.NamespacedName, withFinalizers); err != nil {
+		if err := r.Impl.ClientGet(ctx, r.Client, req.NamespacedName, withFinalizers); err != nil {
 			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource for updating finalizer")
 			return err
 		}
@@ -124,7 +160,7 @@ func (r *MachineConfigReconciler) withFinalizers(ctx context.Context, req ctrl.R
 		}
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
 
-		if err := r.Update(ctx, withFinalizers); err != nil {
+		if err := r.Impl.ClientUpdate(ctx, r.Client, withFinalizers); err != nil {
 			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource finalizers")
 			return err
 		}
@@ -139,7 +175,7 @@ func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, req ctr
 	withoutFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, req.NamespacedName, withoutFinalizers); err != nil {
+		if err := r.Impl.ClientGet(ctx, r.Client, req.NamespacedName, withoutFinalizers); err != nil {
 			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource for removing finalizer")
 			return err
 		}
@@ -163,7 +199,7 @@ func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, req ctr
 		}
 
 		withoutFinalizers.Finalizers = newFinalizers
-		if err := r.Update(ctx, withoutFinalizers); err != nil {
+		if err := r.Impl.ClientUpdate(ctx, r.Client, withoutFinalizers); err != nil {
 			r.Log.Error(err, "failed to remove nodeobservabilitymachineconfig resource finalizers")
 			return err
 		}
@@ -308,7 +344,7 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.
 		}
 	}
 
-	if err = r.Status().Update(ctx, r.CtrlConfig); err != nil {
+	if err = r.Impl.ClientStatusUpdate(ctx, r.Client, r.CtrlConfig); err != nil {
 		r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
