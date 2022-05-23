@@ -20,30 +20,27 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 
-	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 // MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
 type MachineConfigReconciler struct {
-	Impl        impl
-	Client      client.Client
-	SyncRWMutex sync.RWMutex
+	Client
+	sync.RWMutex
+
+	Log           logr.Logger
+	client        client.Client
+	Scheme        *runtime.Scheme
+	EventRecorder record.EventRecorder
 
 	Node          NodeSyncData
-	Record        event.Recorder
 	MachineConfig MachineConfigSyncData
-	Scheme        *runtime.Scheme
-	Log           logr.Logger
 	CtrlConfig    *v1alpha1.NodeObservabilityMachineConfig
-	EventRecorder record.EventRecorder
-	ClientSet     kubernetes.Interface
 }
 
 // NodeSyncData is for storing the state
