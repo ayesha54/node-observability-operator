@@ -25,11 +25,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-type clientImpl struct{}
+type defaultImpl struct{}
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
 //counterfeiter:generate . impl
-type Client interface {
+type impl interface {
 	ManagerGetClient(manager.Manager) client.Client
 	ManagerGetScheme(manager.Manager) *runtime.Scheme
 	ManagerGetEventRecorderFor(manager.Manager, string) record.EventRecorder
@@ -42,64 +42,64 @@ type Client interface {
 	ClientPatch(context.Context, client.Client, client.Object, client.Patch, ...client.PatchOption) error
 }
 
-func NewClient(impls ...Client) Client {
+func NewClient(impls ...impl) impl {
 	if len(impls) != 0 {
 		return impls[0]
 	}
-	return &clientImpl{}
+	return &defaultImpl{}
 }
 
-func (*clientImpl) ManagerGetClient(m manager.Manager) client.Client {
+func (*defaultImpl) ManagerGetClient(m manager.Manager) client.Client {
 	return m.GetClient()
 }
 
-func (*clientImpl) ManagerGetScheme(m manager.Manager) *runtime.Scheme {
+func (*defaultImpl) ManagerGetScheme(m manager.Manager) *runtime.Scheme {
 	return m.GetScheme()
 }
 
-func (*clientImpl) ManagerGetEventRecorderFor(
+func (*defaultImpl) ManagerGetEventRecorderFor(
 	m manager.Manager, name string,
 ) record.EventRecorder {
 	return m.GetEventRecorderFor(name)
 }
 
-func (*clientImpl) ClientGet(
+func (*defaultImpl) ClientGet(
 	ctx context.Context, c client.Client, key client.ObjectKey, obj client.Object,
 ) error {
 	return c.Get(ctx, key, obj)
 }
 
-func (*clientImpl) ClientList(
+func (*defaultImpl) ClientList(
 	ctx context.Context, c client.Client, list client.ObjectList, opts ...client.ListOption,
 ) error {
 	return c.List(ctx, list, opts...)
 }
 
-func (*clientImpl) ClientCreate(
+func (*defaultImpl) ClientCreate(
 	ctx context.Context, c client.Client, obj client.Object, opts ...client.CreateOption,
 ) error {
 	return c.Create(ctx, obj, opts...)
 }
 
-func (*clientImpl) ClientDelete(
+func (*defaultImpl) ClientDelete(
 	ctx context.Context, c client.Client, obj client.Object, opts ...client.DeleteOption,
 ) error {
 	return c.Delete(ctx, obj, opts...)
 }
 
-func (*clientImpl) ClientUpdate(
+func (*defaultImpl) ClientUpdate(
 	ctx context.Context, c client.Client, obj client.Object, opts ...client.UpdateOption,
 ) error {
 	return c.Update(ctx, obj, opts...)
 }
 
-func (*clientImpl) ClientStatusUpdate(
+func (*defaultImpl) ClientStatusUpdate(
 	ctx context.Context, c client.Client, obj client.Object, opts ...client.UpdateOption,
 ) error {
 	return c.Status().Update(ctx, obj, opts...)
 }
 
-func (*clientImpl) ClientPatch(
+func (*defaultImpl) ClientPatch(
 	ctx context.Context, c client.Client, obj client.Object, patch client.Patch, opts ...client.PatchOption,
 ) error {
 	return c.Patch(ctx, obj, patch, opts...)

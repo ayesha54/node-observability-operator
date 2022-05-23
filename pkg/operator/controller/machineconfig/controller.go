@@ -39,11 +39,11 @@ import (
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
 
 // New returns a new MachineConfigReconciler instance.
-func New(mgr ctrlmgr.Manager, impls ...Client) *MachineConfigReconciler {
+func New(mgr ctrlmgr.Manager, impls ...impl) *MachineConfigReconciler {
 	c := NewClient(impls...)
 
 	return &MachineConfigReconciler{
-		Client: c,
+		impl: c,
 
 		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
 		client:        c.ManagerGetClient(mgr),

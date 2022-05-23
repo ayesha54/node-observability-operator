@@ -30,7 +30,7 @@ import (
 
 // MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
 type MachineConfigReconciler struct {
-	Client
+	impl
 	sync.RWMutex
 
 	Log           logr.Logger

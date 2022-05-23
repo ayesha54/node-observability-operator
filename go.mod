@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	github.com/coreos/ignition/v2 v2.13.0
-	github.com/crossplane/crossplane-runtime v0.16.0
 	github.com/go-logr/logr v1.2.2
 	github.com/golangci/golangci-lint v1.42.1
 	github.com/google/go-cmp v0.5.7
