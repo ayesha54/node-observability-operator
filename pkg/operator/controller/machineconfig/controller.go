@@ -24,7 +24,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/logr"
 
@@ -39,7 +38,7 @@ import (
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
 
 // New returns a new MachineConfigReconciler instance.
-func New(mgr ctrlmgr.Manager, impls ...impl) *MachineConfigReconciler {
+func New(mgr ctrl.Manager, impls ...impl) *MachineConfigReconciler {
 	c := NewClient(impls...)
 
 	return &MachineConfigReconciler{
