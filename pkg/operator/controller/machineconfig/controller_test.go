@@ -18,29 +18,208 @@ package machineconfigcontroller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig/machineconfigfakes"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 const (
 	TestControllerResourceName = "machineconfig-test"
 )
+
+var errTest = errors.New("error")
+
+func TestClient(t *testing.T) {
+	r := testReconciler()
+	tests := []struct {
+		name    string
+		reqObjs []runtime.Object
+		preReq  func(*machineconfigfakes.FakeImpl)
+		wantErr bool
+	}{
+		{ // Success
+			name: "Client Get Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientGetCalls(func(
+					ctx context.Context,
+					key types.NamespacedName,
+					obj client.Object,
+				) error {
+					node, _ := obj.(*corev1.Node)
+					node.Status = corev1.NodeStatus{
+						Addresses: []corev1.NodeAddress{
+							{Type: corev1.NodeInternalIP, Address: "127.0.0.1"},
+						},
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientGet fails
+			name: "ClientGet Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientGetReturns(errTest)
+			},
+			wantErr: true,
+		},
+		{ // Success
+			name: "ClientList Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption,
+				) error {
+					//
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientList fails
+			name: "ClientList Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientListReturns(errTest)
+			},
+			wantErr: true,
+		},
+		{ // Success
+			name: "ClientCreate Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientCreateCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					opts ...client.CreateOption,
+				) error {
+					//
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientDelete fails
+			name: "ClientDelete Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientCreateReturns(errTest)
+			},
+			wantErr: true,
+		},
+		{ // Success
+			name: "ClientDelete Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientDeleteCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					opts ...client.DeleteOption,
+				) error {
+					//
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientDelete fails
+			name: "ClientDelete Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientDeleteReturns(errTest)
+			},
+			wantErr: true,
+		},
+		{ // Success
+			name: "ClientUpdate Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientUpdateCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					opts ...client.UpdateOption,
+				) error {
+					//
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientUpdate fails
+			name: "ClientUpdate Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientUpdateReturns(errTest)
+			},
+			wantErr: true,
+		},
+		{ // Success
+			name: "ClientStatusUpdate Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientStatusUpdateCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					opts ...client.UpdateOption,
+				) error {
+					//
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientStatusUpdate fails
+			name: "ClientStatusUpdate Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientStatusUpdateReturns(errTest)
+			},
+			wantErr: true,
+		},
+		{ // Success
+			name: "ClientPatch Successful",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientPatchCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					patch client.Patch,
+					opts ...client.PatchOption,
+				) error {
+					//
+					return nil
+				})
+			},
+			wantErr: false,
+		},
+		{ // ClientPatch fails
+			name: "ClientPatch Failed",
+			preReq: func(mock *machineconfigfakes.FakeImpl) {
+				mock.ClientPatchReturns(errTest)
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			mock := &machineconfigfakes.FakeImpl{}
+			r.impl = mock
+			if tt.preReq != nil {
+				tt.preReq(mock)
+			}
+
+		})
+	}
+
+}
 
 func testReconciler() *MachineConfigReconciler {
 	nomc := testNodeObsMC()
