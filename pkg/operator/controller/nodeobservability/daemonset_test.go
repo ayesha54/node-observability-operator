@@ -37,7 +37,8 @@ import (
 )
 
 const (
-	nodeObsInstanceName = "nodeobservability-sample"
+	nodeObsInstanceName    = "nodeobservability-sample"
+	kubeletCAConfigMapName = "kubelet-serving-ca"
 )
 
 type testDaemonsetBuilder struct {
@@ -282,7 +283,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: nodeObsInstanceName,
+									Name: kubeletCAConfigMapName,
 								},
 							},
 						},
@@ -360,7 +361,7 @@ func TestEnsureDaemonset(t *testing.T) {
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: nodeObsInstanceName,
+										Name: kubeletCAConfigMapName,
 									},
 								},
 							},
@@ -451,7 +452,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: nodeObsInstanceName,
+									Name: kubeletCAConfigMapName,
 								},
 							},
 						},
@@ -548,7 +549,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: nodeObsInstanceName,
+									Name: kubeletCAConfigMapName,
 								},
 							},
 						},
@@ -912,8 +913,8 @@ func TestHasSecurityContextChanged(t *testing.T) {
 func makeKubeletCACM() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      srcKbltCAConfigMapName,
-			Namespace: srcKbltCAConfigMapNameSpace,
+			Name:      "kubelet-serving-ca",
+			Namespace: "openshift-config-managed",
 		},
 		Data: map[string]string{
 			"ca-bundle.crt": "empty",

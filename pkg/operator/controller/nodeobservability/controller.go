@@ -60,7 +60,8 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
-//+kubebuilder:rbac:groups=core,resources=configmaps,resourceNames=kubelet-serving-ca,verbs=get;list;
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;
+//+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
 //+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;
 //+kubebuilder:rbac:urls=/debug/*,verbs=get;

@@ -44,13 +44,7 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 	if err != nil && !errors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get daemonset %q due to: %w", nameSpace, err)
 	} else if err != nil && errors.IsNotFound(err) {
-
 		// create daemon since it doesn't exist
-		err := r.createConfigMap(ctx, nodeObs, ns)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create the configmap for kubelet-serving-ca: %w", err)
-		}
-
 		if err := r.createDaemonSet(ctx, desired); err != nil {
 			return nil, fmt.Errorf("failed to create daemonset %q: %w", nameSpace, err)
 		}
@@ -228,7 +222,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: nodeObs.Name,
+										Name: "kubelet-serving-ca",
 									},
 								},
 							},

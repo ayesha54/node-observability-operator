@@ -32,6 +32,14 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - authentication.k8s.io
   resources:
   - tokenreviews
@@ -45,13 +53,12 @@ rules:
   - create
 - apiGroups:
   - ""
-  resourceNames:
-  - kubelet-serving-ca
   resources:
   - configmaps
   verbs:
   - get
   - list
+  - watch
 - apiGroups:
   - ""
   resources:

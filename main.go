@@ -45,6 +45,7 @@ import (
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	nodeobservabilityv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	caconfigmapcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/ca-configmap"
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 	nodeobservabilitycontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
 	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
@@ -122,7 +123,6 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "94c735b6.olm.openshift.io",
-		Namespace:              operatorNamespace,
 		// Use a non-caching client everywhere. The default split client does not
 		// promise to invalidate the cache during writes (nor does it promise
 		// sequential create/get coherence), and we have code which (probably
@@ -134,6 +134,10 @@ func main() {
 		NewClient: func(_ cache.Cache, config *rest.Config, options client.Options, _ ...client.Object) (client.Client, error) {
 			return client.New(config, options)
 		},
+		NewCache: cache.MultiNamespacedCacheBuilder([]string{
+			operatorNamespace,
+			"openshift-config-managed",
+		}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -182,6 +186,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	if _, err := caconfigmapcontroller.New(mgr, caconfigmapcontroller.Config{
+		SourceNamespace: "openshift-config-managed",
+		TargetNamespace: operatorNamespace,
+		CAConfigMapName: "kubelet-serving-ca",
+	}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CAConfigMap")
+		os.Exit(1)
+	}
+
 	if enableWebhook {
 		setupLog.Info("starting webhooks")
 		if err = (&nodeobservabilityv1alpha1.NodeObservability{}).SetupWebhookWithManager(mgr); err != nil {
@@ -201,6 +214,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
