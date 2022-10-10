@@ -133,11 +133,10 @@ func TestReconcile(t *testing.T) {
 			tc.expectedEvents = nil
 
 			r := &NodeObservabilityReconciler{
-				Client:            cl,
-				ClusterWideClient: cl,
-				Scheme:            test.Scheme,
-				Log:               zap.New(zap.UseDevMode(true)),
-				AgentImage:        "test",
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "test",
 			}
 
 			// the add and modify events should only be added when there are no 'simulated' errors

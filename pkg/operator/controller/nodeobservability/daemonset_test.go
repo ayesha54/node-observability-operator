@@ -570,12 +570,11 @@ func TestEnsureDaemonset(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
 			r := &NodeObservabilityReconciler{
-				Client:            cl,
-				ClusterWideClient: cl,
-				Scheme:            test.Scheme,
-				Namespace:         test.TestNamespace,
-				Log:               zap.New(zap.UseDevMode(true)),
-				AgentImage:        "node-observability-agent:latest",
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Namespace:  test.TestNamespace,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "node-observability-agent:latest",
 			}
 			nodeObs := &operatorv1alpha2.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{Name: nodeObsInstanceName},
@@ -831,12 +830,11 @@ func TestUpdateDaemonSet(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithObjects(tc.existingDaemonset).Build()
 			r := &NodeObservabilityReconciler{
-				Client:            cl,
-				ClusterWideClient: cl,
-				Scheme:            test.Scheme,
-				Namespace:         test.TestNamespace,
-				Log:               zap.New(zap.UseDevMode(true)),
-				AgentImage:        "node-observability-agent:latest",
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Namespace:  test.TestNamespace,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "node-observability-agent:latest",
 			}
 			updated, err := r.updateDaemonset(context.Background(), tc.existingDaemonset, tc.desiredDaemonset)
 			if err != nil {

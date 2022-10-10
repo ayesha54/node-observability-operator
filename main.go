@@ -36,6 +36,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -115,7 +116,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	config := ctrl.GetConfigOrDie()
+	// Use a non-caching client everywhere. The default split client does not
+	// promise to invalidate the cache during writes (nor does it promise
+	// sequential create/get coherence), and we have code which (probably
+	// incorrectly) assumes a get immediately following a create/update will
+	// return the updated resource. All client consumers will need audited to
+	// ensure they are tolerant of stale data (or we need a cache or client that
+	// makes stronger coherence guarantees).
+	// https://pkg.go.dev/sigs.k8s.io/controller-runtime#hdr-Clients_and_Caches
+	newNoCacheClientFunc := func(_ cache.Cache, config *rest.Config, options client.Options, _ ...client.Object) (client.Client, error) {
+		return client.New(config, options)
+	}
+
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Logger:                 logger,
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -123,46 +137,20 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "94c735b6.olm.openshift.io",
-		// Use a non-caching client everywhere. The default split client does not
-		// promise to invalidate the cache during writes (nor does it promise
-		// sequential create/get coherence), and we have code which (probably
-		// incorrectly) assumes a get immediately following a create/update will
-		// return the updated resource. All client consumers will need audited to
-		// ensure they are tolerant of stale data (or we need a cache or client that
-		// makes stronger coherence guarantees).
-		// https://pkg.go.dev/sigs.k8s.io/controller-runtime#hdr-Clients_and_Caches
-		NewClient: func(_ cache.Cache, config *rest.Config, options client.Options, _ ...client.Object) (client.Client, error) {
-			return client.New(config, options)
-		},
-		NewCache: cache.MultiNamespacedCacheBuilder([]string{
-			operatorNamespace,
-			"openshift-config-managed",
-		}),
+		Namespace:              operatorNamespace,
+		NewClient:              newNoCacheClientFunc,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	// KubeAPI client to be used only in order to get the configmap kubelet-serving-ca
-	// from NS openshift-config-managed.
-	// The clusterWideCli is needed because ConfigMaps are namespaced resources, and in the context
-	// of a namespaced operator, the operator only looks for the namespaced resources in its own namespace
-	// see https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.1/pkg/manager#Options => Namespace
-	clusterWideCli, err := client.New(mgr.GetConfig(), client.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		setupLog.Error(err, "unable to create a client")
-		os.Exit(1)
-	}
 
 	if err := (&nodeobservabilitycontroller.NodeObservabilityReconciler{
-		Client:            mgr.GetClient(),
-		ClusterWideClient: clusterWideCli,
-		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controller.nodeobservability"),
-		Namespace:         operatorNamespace,
-		AgentImage:        agentImage,
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		Log:        ctrl.Log.WithName("controller.nodeobservability"),
+		Namespace:  operatorNamespace,
+		AgentImage: agentImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "nodeobservability")
 		os.Exit(1)
@@ -186,10 +174,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Cluster is a runnable managed by controller-runtime's manager
+	// with its own client and cache.
+	// We deliberately use a dedicated cache for the watches of ca-configmap-controller
+	// to avoid the unnecessary cluster level permissions.
+	// ca-configmap-controller needs a namespace different from the operator's (source namespace)
+	// which forces the usage of the multinamespace shared cache of the manager.
+	// The additional namespace in turn obliges all the other controllers to have the rights
+	// to watch in it which results into cluster level permissions for all the operands:
+	// daemonset, serviceaccounts, services, since the local role cannot be created in another namespace via OLM.
+	// Inspired by https://github.com/kubernetes-sigs/controller-runtime/blob/master/designs/move-cluster-specific-code-out-of-manager.md
+	cluster, err := cluster.New(config, func(opts *cluster.Options) {
+		opts.NewClient = newNoCacheClientFunc
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create controller-runtime cluster")
+		os.Exit(1)
+	}
+
+	if err := mgr.Add(cluster); err != nil {
+		setupLog.Error(err, "unable to add controller-runtime cluster to manager")
+		os.Exit(1)
+	}
+
 	if _, err := caconfigmapcontroller.New(mgr, caconfigmapcontroller.Config{
 		SourceNamespace: "openshift-config-managed",
 		TargetNamespace: operatorNamespace,
 		CAConfigMapName: "kubelet-serving-ca",
+		Cluster:         cluster,
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CAConfigMap")
 		os.Exit(1)

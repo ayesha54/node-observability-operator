@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -46,6 +47,7 @@ type Config struct {
 	SourceNamespace string
 	TargetNamespace string
 	CAConfigMapName string
+	Cluster         cluster.Cluster
 }
 
 type reconciler struct {
@@ -60,7 +62,7 @@ func New(mgr manager.Manager, config Config) (controller.Controller, error) {
 	log := ctrl.Log.WithName(controllerName)
 
 	reconciler := &reconciler{
-		client: mgr.GetClient(),
+		client: config.Cluster.GetClient(),
 		config: config,
 		log:    log,
 	}
@@ -82,7 +84,7 @@ func New(mgr manager.Manager, config Config) (controller.Controller, error) {
 
 	// Watch the configmap from the source namespace
 	if err := c.Watch(
-		&source.Kind{Type: &corev1.ConfigMap{}},
+		source.NewKindWithCache(&corev1.ConfigMap{}, config.Cluster.GetCache()),
 		&handler.EnqueueRequestForObject{},
 		predicate.And(predicate.NewPredicateFuncs(ctrlutils.InNamespace(config.SourceNamespace)), predicate.NewPredicateFuncs(ctrlutils.HasName(config.CAConfigMapName))),
 	); err != nil {
@@ -92,7 +94,7 @@ func New(mgr manager.Manager, config Config) (controller.Controller, error) {
 	// Watch the configmap from the target namespace
 	// and enqueue the one from the source namespace
 	if err := c.Watch(
-		&source.Kind{Type: &corev1.ConfigMap{}},
+		source.NewKindWithCache(&corev1.ConfigMap{}, config.Cluster.GetCache()),
 		handler.EnqueueRequestsFromMapFunc(targetToSource),
 		predicate.And(predicate.NewPredicateFuncs(ctrlutils.InNamespace(config.TargetNamespace)), predicate.NewPredicateFuncs(ctrlutils.HasName(nodeObsKubeletCAConfigMapName("").Name))),
 	); err != nil {
